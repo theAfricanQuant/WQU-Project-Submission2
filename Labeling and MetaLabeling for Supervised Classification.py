@@ -251,19 +251,27 @@ def getDailyVol(close,span0=100):
         print('\n df0 index\n', df0.index)
         print('\n df0 values\n', df0.values)
         dfidxs=close.loc[df0.index].drop_duplicates()
-        dfvals=close.loc[df0.values].iloc[:dfidxs.size] #.drop_duplicates()
+        dfvals=close.loc[df0.values]#.iloc[:dfidxs.size] #.drop_duplicates()
         print('\n close.loc[df0.index]\n', dfidxs)
         print('\n close.loc[df0.values]\n', dfvals)
-        df1=(dfidxs.values/dfvals.values) -1 # daily rets
-        
+        #df1=(dfidxs.values/dfvals.values) -1 # daily rets
+        df0=(dfidxs/dfvals.values) -1 # daily rets
         print('\n df1\n',df1)
     except Exception as e:
-        print(f'error: {e}\n')
-    df4=pd.Series(df1).ewm(span=span0).std().dropna()
-    print('\n df4\n', df4)
-    df2=(pd.Series(df4.values,index=close.index[close.shape[0]-df4.shape[0]:]))
-    print('\n df2\n', df2)
-    return df2
+        print(e)
+        print('adjusting shape of close.loc[df0.index]')
+        cut = close.loc[df0.index].shape[0] - close.loc[df0.values].shape[0]
+        df0=close.loc[df0.index].iloc[:-cut]/close.loc[df0.values].values-1
+        
+    #df4=pd.Series(df1).ewm(span=span0).std().dropna()
+    #df0=pd.Series(df1).ewm(span=span0).std().dropna()
+    df0=(df0).ewm(span=span0).std().dropna()
+
+    #print('\n df4\n', df4)
+    #df2=(pd.Series(df4.values,index=close.index[close.shape[0]-df4.shape[0]:]))
+    #print('\n df2\n', df2)
+    #return df2
+    return df0
 
 
 # ### Triple-Barrier Labeling Method [3.2]
@@ -305,10 +313,17 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     #3) form events object, apply stop loss on t1
     if side is None:side_,ptSl_=pd.Series(1.,index=trgt.index), [ptSl[0],ptSl[0]]
     else: side_,ptSl_=side.loc[trgt.index],ptSl[:2]
-    events=(pd.concat({'t1':t1,'trgt':trgt,'side':side_}, axis=1)
-            .dropna(subset=['trgt']))
+    #trgt=trgt.iloc[trgt.size-t1.size:]
+    #side_=side_.iloc[side_.size-t1.size:]
+    print('\nin getEvents','trgt\n', trgt,'t1\n', t1,'side\n', side_)
+    events=(pd.concat({'trgt':trgt,'side':side_}, axis=1,ignore_index=True).dropna())
+    #events=pd.concat({'t1':t1,'side':events.columns[0],'trgt':events.columns[1]},ignore_index=True)
+    events=events.merge(pd.DataFrame(t1),right_index=True,left_index=True).drop_duplicates()
+    
+    events=events.rename(columns={ events.columns[0]: "side",events.columns[1]: "trgt",events.columns[2]: "t1" })
+    print('\nin getEvents','close\n', close,'events\n', events,'ptsl\n', ptSl_,'molecule\n' ,events.index)
+    
     #df0=mpPandasObj(func=applyPtSlOnT1,pdObj=('molecule',events.index),numThreads=numThreads,close=close,events=events,ptSl=ptSl_)
-    print('in getEvents','close', close,'events', events,'ptsl', ptSl_,'molecule' ,events.index)
     df0=applyPtSlOnT1(close, events, ptSl_, events.index)
     print('df0',df0)
     events['t1']=df0.dropna(how='all').min(axis=1) # pd.min ignores nan
