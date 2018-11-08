@@ -289,12 +289,18 @@ def applyPtSlOnT1(close,events,ptSl,molecule):
     else: pt=pd.Series(index=events.index) # NaNs
     if ptSl[1]>0: sl=-ptSl[1]*events_['trgt']
     else: sl=pd.Series(index=events.index) # NaNs
+    i=0
     for loc,t1 in events_['t1'].fillna(close.index[-1]).iteritems():
-        df0=close[loc:t1] # path prices
-        print(df0)
-        df0=(df0/close[loc]-1)*events_.at[loc,'side'] # path returns
-        out.loc[loc,'sl']=df0[df0<sl[loc]].index.min() # earliest stop loss
-        out.loc[loc,'pt']=df0[df0>pt[loc]].index.min() # earliest profit taking
+        try:
+            df0=close[loc:t1] # path prices
+            #print('\niter ', i, 'df0 \n',df0)
+            df0=(df0/close[loc]-1)*events_.at[loc,'side'] # path returns
+            out.loc[loc,'sl']=df0[df0<sl[loc]].index.min() # earliest stop loss
+            out.loc[loc,'pt']=df0[df0>pt[loc]].index.min() # earliest profit taking
+            #print('out \n',out)
+            i=i+1
+        except Exception as e:
+            pass#print(e)
     return out
 
 
@@ -325,8 +331,8 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     
     #df0=mpPandasObj(func=applyPtSlOnT1,pdObj=('molecule',events.index),numThreads=numThreads,close=close,events=events,ptSl=ptSl_)
     df0=applyPtSlOnT1(close, events, ptSl_, events.index)
-    print('df0',df0)
-    events['t1']=df0.dropna(how='all').min(axis=1) # pd.min ignores nan
+    print('df0 after applyPtSl',df0)
+    events['t1']=df0.dropna()#how='all').min(axis=1) # pd.min ignores nan
     if side is None:events=events.drop('side',axis=1)
     return events
 
@@ -380,15 +386,14 @@ def getBins(events, close):
     -events['side'] (optional) implies the algo's position side
     Case 1: ('side' not in events): bin in (-1,1) <-label by price action
     Case 2: ('side' in events): bin in (0,1) <-label by pnl (meta-labeling)
-
+    '''
     #1) prices aligned with events
     events_=events.dropna(subset=['t1'])
     px=events_.index.union(events_['t1'].values).drop_duplicates()
-	try:
-		px=close.reindex(px,method='bfill')
-	except:
-		pass
-
+    try:
+        px=close.reindex(px,method='bfill')
+    except Exception as e:
+        print(e)
     #2) create out object
     out=pd.DataFrame(index=events_.index)
     out['ret']=px.loc[events_['t1'].values].values/px.loc[events_.index]-1
@@ -396,7 +401,7 @@ def getBins(events, close):
     out['bin']=np.sign(out['ret'])
     if 'side' in events_:out.loc[out['ret']<=0,'bin']=0 # meta-labeling
     return out
-    '''
+
 
 # ### Dropping Unnecessary Labels [3.8]
 
@@ -610,7 +615,7 @@ ax.axhline(dailyVol.mean(),ls='--',color=red)
 
 
 tEvents = getTEvents(close,h=dailyVol.mean())
-tEvents
+print(tEvents)
 
 
 # ### (b) Add vertical barrier
@@ -619,7 +624,7 @@ tEvents
 
 
 t1 = addVerticalBarrier(tEvents, close)
-t1
+print(t1)
 
 
 # ### (c) Apply triple-barrier method where `ptSl = [1,1]` and `t1` is the series created in `1.b`
@@ -642,14 +647,14 @@ events = getEvents(close,tEvents,ptsl,target,minRet,cpus,t1)
 
 cprint(events)
 
-
+'''
 # ### (d) Apply `getBins` to generate labels
 
 # In[109]:
 
 
 labels = getBins(events, close)
-cprint(labels)
+print(labels)
 
 
 # In[110]:
@@ -1038,7 +1043,7 @@ plt.show()
 
 
 # In[ ]:
-
+'''
 
 
 
