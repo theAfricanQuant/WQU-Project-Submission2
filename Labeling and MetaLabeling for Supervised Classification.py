@@ -396,6 +396,7 @@ def getBins(events, close):
         print(e)
     #2) create out object
     out=pd.DataFrame(index=events_.index)
+    px=pd.DataFrame(px)
     out['ret']=px.loc[events_['t1'].values].values/px.loc[events_.index]-1
     if 'side' in events_:out['ret']*=events_['side'] # meta-labeling
     out['bin']=np.sign(out['ret'])
@@ -640,14 +641,11 @@ minRet = 0.01
 # get cpu count - 1
 cpus = cpu_count() - 1
 events = getEvents(close,tEvents,ptsl,target,minRet,cpus,t1)
-
+events = events.dropna()
 
 # In[170]:
+print(events)
 
-
-cprint(events)
-
-'''
 # ### (d) Apply `getBins` to generate labels
 
 # In[109]:
