@@ -60,7 +60,7 @@ import missingno as msno
 #from bars import *
 import pymc3 as pm
 from theano import shared, theano as tt
-#import ffn
+import ffn
 RANDOM_STATE = 777
 
 print()
@@ -322,9 +322,9 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     #trgt=trgt.iloc[trgt.size-t1.size:]
     #side_=side_.iloc[side_.size-t1.size:]
     print('\nin getEvents','trgt\n', trgt,'t1\n', t1,'side\n', side_)
-    events=(pd.concat({'trgt':trgt,'side':side_}, axis=1,ignore_index=True).dropna())
+    events=(pd.concat({'trgt':trgt,'side':side_}, axis=1,ignore_index=True).dropna().drop_duplicates())
     #events=pd.concat({'t1':t1,'side':events.columns[0],'trgt':events.columns[1]},ignore_index=True)
-    events=events.merge(pd.DataFrame(t1),right_index=True,left_index=True).drop_duplicates()
+    events=events.merge(pd.DataFrame(t1),right_index=True,left_index=True).dropna().drop_duplicates()
     
     events=events.rename(columns={ events.columns[0]: "side",events.columns[1]: "trgt",events.columns[2]: "t1" })
     print('\nin getEvents','close\n', close,'events\n', events,'ptsl\n', ptSl_,'molecule\n' ,events.index)
@@ -335,12 +335,10 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
     events['t1']=df0.dropna()#how='all').min(axis=1) # pd.min ignores nan
     if side is None:events=events.drop('side',axis=1)
     return events
-
-
+  
 # ### Adding Vertical Barrier [3.4]
 
 # In[135]:
-
 
 def addVerticalBarrier(tEvents, close, numDays=1):
     t1=close.index.searchsorted(tEvents+pd.Timedelta(days=numDays))
@@ -390,17 +388,32 @@ def getBins(events, close):
     #1) prices aligned with events
     events_=events.dropna(subset=['t1'])
     px=events_.index.union(events_['t1'].values).drop_duplicates()
+    print('\n events_ \n', events_)
+    #px=pd.DataFrame(px)
+    
+    print('\n px \n', px)
     try:
         px=close.reindex(px,method='bfill')
     except Exception as e:
-        print(e)
+        print(e,'\n trying join')
+        px=px.to_frame().join(close, how='inner').drop_duplicates();
+        
     #2) create out object
     out=pd.DataFrame(index=events_.index)
-    px=pd.DataFrame(px)
-    out['ret']=px.loc[events_['t1'].values].values/px.loc[events_.index]-1
+    
+    print('\n out \n', out)
+    print('\n px \n', px)
+    print('\n events_[t1]\n', events_['t1'])
+    et1=events_['t1']
+    px_et1=px.loc[et1].drop_duplicates()
+    px_eIndex=px.loc[events_.index].drop_duplicates()
+    out['ret']=(px_et1['price'].values/px_eIndex[:px_et1.shape[0]]['price'])-1
+    
     if 'side' in events_:out['ret']*=events_['side'] # meta-labeling
     out['bin']=np.sign(out['ret'])
     if 'side' in events_:out.loc[out['ret']<=0,'bin']=0 # meta-labeling
+    out=out.dropna().drop_duplicates()
+    print('\n out \n', out)
     return out
 
 
@@ -574,21 +587,25 @@ copyreg.pickle(types.MethodType,_pickle_method,_unpickle_method)
 
 # In[146]:
 
-
-df = pd.read_csv('dollar_bars.csv')
-#df=df.set_index('timestamp')
+path = os.getcwd()
+df = pd.read_csv(path+'/bitstampUSD_21.csv', index_col=0)
 cprint(df)
+
+
+# ## [3.1] Form Dollar Bars
+
+# In[18]:
+
+
+dbars = dollar_bar_df(df, 'dv', 100_000).drop_duplicates().dropna()
+cprint(dbars)
 
 
 # ## [3.1] Form Dollar Bars
 
 # In[178]:
 
-
-
-dbars = dollar_bar_df(df, 'dv', 100_000).drop_duplicates().dropna()
-dbars['timestamp'] = pd.to_datetime(dbars['timestamp'])
-dbars=dbars.set_index('timestamp')
+dbars.index = pd.to_datetime(dbars.index)
 dbars=dbars.drop_duplicates().dropna()
 cprint(dbars)
 
@@ -1040,5 +1057,4 @@ plt.legend(loc='best')
 plt.show()
 
 
-
-
+# In[ ]:
