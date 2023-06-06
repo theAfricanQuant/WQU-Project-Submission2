@@ -184,13 +184,11 @@ def numba_isclose(a,b,rel_tol=1e-09,abs_tol=0.0):
 
 @jit(nopython=True)
 def bt(p0, p1, bs):
-    #if math.isclose((p1 - p0), 0.0, abs_tol=0.001):
-    if numba_isclose((p1-p0),0.0,abs_tol=0.001):
-        b = bs[-1]
-        return b
-    else:
-        b = np.abs(p1-p0)/(p1-p0)
-        return b
+    return (
+        bs[-1]
+        if numba_isclose((p1 - p0), 0.0, abs_tol=0.001)
+        else np.abs(p1 - p0) / (p1 - p0)
+    )
 
 @jit(nopython=True)
 def get_imbalance(t):
@@ -343,8 +341,7 @@ def getEvents(close, tEvents, ptSl, trgt, minRet, numThreads, t1=False, side=Non
 def addVerticalBarrier(tEvents, close, numDays=1):
     t1=close.index.searchsorted(tEvents+pd.Timedelta(days=numDays))
     t1=t1[t1<close.shape[0]]
-    t1=(pd.Series(close.index[t1],index=tEvents[:t1.shape[0]]))
-    return t1
+    return (pd.Series(close.index[t1],index=tEvents[:t1.shape[0]]))
 
 
 # ### Labeling for side and size [3.5]
@@ -450,7 +447,7 @@ def linParts(numAtoms,numThreads):
 def nestedParts(numAtoms,numThreads,upperTriang=False):
     # partition of atoms with an inner loop
     parts,numThreads_=[0],min(numThreads,numAtoms)
-    for num in range(numThreads_):
+    for _ in range(numThreads_):
         part=1+4*(parts[-1]**2+parts[-1]+numAtoms*(numAtoms+1.)/numThreads_)
         part=(-1+part**.5)/2.
         parts.append(part)
@@ -481,11 +478,10 @@ def mpPandasObj(func,pdObj,numThreads=24,mpBatches=1,linMols=True,**kargs):
     #else:parts=nestedParts(len(argList[1]),numThreads*mpBatches)
     if linMols:parts=linParts(len(pdObj[1]),numThreads*mpBatches)
     else:parts=nestedParts(len(pdObj[1]),numThreads*mpBatches)
-    
+
     jobs=[]
     for i in range(1,len(parts)):
-        job={pdObj[0]:pdObj[1][parts[i-1]:parts[i]],'func':func}
-        job.update(kargs)
+        job = {pdObj[0]:pdObj[1][parts[i-1]:parts[i]],'func':func} | kargs
         jobs.append(job)
     if numThreads==1:out=processJobs_(jobs)
     else: out=processJobs(jobs,numThreads=numThreads)
@@ -525,7 +521,15 @@ def reportProgress(jobNum,numJobs,time0,task):
     msg=[float(jobNum)/numJobs, (time.time()-time0)/60.]
     msg.append(msg[1]*(1/msg[0]-1))
     timeStamp=str(dt.datetime.fromtimestamp(time.time()))
-    msg=timeStamp+' '+str(round(msg[0]*100,2))+'% '+task+' done after '+         str(round(msg[1],2))+' minutes. Remaining '+str(round(msg[2],2))+' minutes.'
+    msg = (
+        f'{timeStamp} {str(round(msg[0] * 100, 2))}% '
+        + task
+        + ' done after '
+        + str(round(msg[1], 2))
+        + ' minutes. Remaining '
+        + str(round(msg[2], 2))
+        + ' minutes.'
+    )
     if jobNum<numJobs:sys.stderr.write(msg+'\r')
     else:sys.stderr.write(msg+'\n')
     return
@@ -553,8 +557,7 @@ def expandCall(kargs):
     # Expand the arguments of a callback function, kargs['func']
     func=kargs['func']
     del kargs['func']
-    out=func(**kargs)
-    return out
+    return func(**kargs)
 
 
 # ### Pickle Unpickling Objects [20.11]
@@ -588,7 +591,7 @@ copyreg.pickle(types.MethodType,_pickle_method,_unpickle_method)
 # In[146]:
 
 path = os.getcwd()
-df = pd.read_csv(path+'/bitstampUSD_21.csv', index_col=0)
+df = pd.read_csv(f'{path}/bitstampUSD_21.csv', index_col=0)
 cprint(df)
 
 
